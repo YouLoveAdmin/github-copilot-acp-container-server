@@ -18,6 +18,7 @@ if ! command -v copilot >/dev/null 2>&1; then
   echo "copilot command not found. Ensure @github/copilot is installed." >&2
   exit 1
 fi
+ACP_COPILOT_SELF_HEAL="${ACP_COPILOT_SELF_HEAL:-true}"
 
 if [ ! -d "$ACP_WORKDIR" ]; then
   echo "ACP working directory does not exist: $ACP_WORKDIR" >&2
@@ -32,6 +33,66 @@ is_copilot_authenticated() {
   copilot -p "Reply with OK only." --allow-all-tools --output-format json >/dev/null 2>&1
 }
 
+copilot_arch_package() {
+  case "$(node -p 'process.arch' 2>/dev/null || echo unknown)" in
+    x64)
+      echo "@github/copilot-linux-x64"
+      ;;
+    arm64)
+      echo "@github/copilot-linux-arm64"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+copilot_native_binary_path() {
+  pkg="$(copilot_arch_package)"
+  if [ -z "$pkg" ]; then
+    echo ""
+    return 0
+  fi
+  echo "/usr/local/lib/node_modules/@github/copilot/node_modules/${pkg}/copilot"
+}
+
+copilot_cli_healthy() {
+  if ! copilot --version >/dev/null 2>&1; then
+    return 1
+  fi
+
+  native_bin="$(copilot_native_binary_path)"
+  if [ -n "$native_bin" ] && [ -x "$native_bin" ]; then
+    "$native_bin" --version >/dev/null 2>&1 || return 1
+  fi
+
+  return 0
+}
+
+repair_copilot_cli() {
+  echo "Attempting one-time Copilot CLI self-heal reinstall..."
+  npm uninstall -g @github/copilot >/dev/null 2>&1 || true
+  npm install -g @github/copilot@latest >/dev/null 2>&1
+}
+
+ensure_copilot_cli_healthy() {
+  if copilot_cli_healthy; then
+    return 0
+  fi
+
+  echo "Copilot CLI health check failed (uname -m: $(uname -m), node arch: $(node -p 'process.arch' 2>/dev/null || echo unknown))." >&2
+
+  if [ "$ACP_COPILOT_SELF_HEAL" = "true" ]; then
+    if repair_copilot_cli && copilot_cli_healthy; then
+      echo "Copilot CLI self-heal succeeded."
+      return 0
+    fi
+  fi
+
+  echo "Copilot CLI is unhealthy. If this persists on this VM, rebuild image with no cache and recreate container." >&2
+  return 1
+}
+
 copilot_login_plain() {
   env TERM=dumb NO_COLOR=1 copilot login
 }
@@ -39,6 +100,10 @@ copilot_login_plain() {
 attempt_copilot_login() {
   # Prefer direct login to keep device-code output intact and avoid TTY shim issues.
   echo "Attempting direct copilot login..."
+
+if ! ensure_copilot_cli_healthy; then
+  exit 1
+fi
   if copilot_login_plain; then
     return 0
   fi
