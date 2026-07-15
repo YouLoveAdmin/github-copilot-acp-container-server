@@ -164,10 +164,6 @@ docker build -t github-copilot-acp-container-server:local .
 - Volume `./copilot-home:/root/.copilot` is mounted by default to persist Copilot login/session state across restarts.
 - Port mapping in compose is `3000:3000`.
 
-## Legacy code
-
-This repository still contains a TypeScript prototype server under [src](src), but container runtime is now anchored on GitHub Copilot CLI ACP mode.
-
 ## License
 
 MIT License. See [LICENSE](LICENSE).
