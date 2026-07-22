@@ -353,10 +353,8 @@ bootstrap_default_agent() {
     return 1
   fi
 
-  if [ ! -f "$AGENT_FILE" ] || ! cmp -s "$ACP_AGENT_TEMPLATE_SOURCE" "$AGENT_FILE"; then
-    cp "$ACP_AGENT_TEMPLATE_SOURCE" "$AGENT_FILE"
-    echo "Synced default custom agent into runtime workdir: $AGENT_FILE"
-  fi
+  cp "$ACP_AGENT_TEMPLATE_SOURCE" "$AGENT_FILE"
+  echo "Synced default custom agent into runtime workdir: $AGENT_FILE"
 
   return 0
 }

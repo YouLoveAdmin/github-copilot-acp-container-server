@@ -19,8 +19,8 @@ Transport terminology used in this README:
 Reference concept for Windows is in [start-acp.ps1](start-acp.ps1). Linux/container startup is implemented by [start-acp.sh](start-acp.sh).
 Windows via WSL is supported by [start-acp-wsl.ps1](start-acp-wsl.ps1) and the same [start-acp.sh](start-acp.sh) bootstrap script.
 
-The default agent template can be overridden by placing [ACP-Chatbot.agent.local.md](ACP-Chatbot.agent.local.md) in the runtime workspace and it is synced into [workspace/.github/agents/ACP-Chatbot.agent.md](workspace/.github/agents/ACP-Chatbot.agent.md) on startup.
-Create it with a copy command, similar to creating `.env` from `.env.example`.
+The default agent template can be overridden with [ACP-Chatbot.agent.local.md](ACP-Chatbot.agent.local.md) at the repository root for Docker Compose runs.
+Startup syncs this template into [workspace/.github/agents/ACP-Chatbot.agent.md](workspace/.github/agents/ACP-Chatbot.agent.md) on every container start.
 
 ## What starts in the container
 
@@ -145,6 +145,7 @@ WSL notes:
 - The startup script now reads a repo-local `.env` when present.
 - If `/workspace` is not available, the startup script defaults `ACP_WORKDIR` to `<repo>/workspace`.
 - The default local override template path is `$ACP_WORKDIR/ACP-Chatbot.agent.local.md` and it is synced into `$ACP_WORKDIR/.github/agents/ACP-Chatbot.agent.md` at startup.
+- Docker Compose overrides `ACP_AGENT_TEMPLATE_SOURCE` to `/host-repo/ACP-Chatbot.agent.local.md`, so editing the repo-root local file is picked up on next container start.
 - Use `ACP_BIND_ALL_INTERFACES=false` for loopback-only mode, or `true` if you want the WSL process to bind publicly on the port.
 
 ## Native Linux Run (No Docker)
@@ -222,7 +223,7 @@ mkdir -p workspace copilot-home
 
 ```bash
 cp .env.example .env
-cp ACP-Chatbot.agent.md workspace/ACP-Chatbot.agent.local.md
+cp ACP-Chatbot.agent.md ACP-Chatbot.agent.local.md
 ```
 
 5. Build and start the ACP container:
@@ -275,7 +276,7 @@ New-Item -ItemType Directory -Force -Path workspace, copilot-home | Out-Null
 
 ```powershell
 Copy-Item .env.example .env
-Copy-Item ACP-Chatbot.agent.md workspace/ACP-Chatbot.agent.local.md
+Copy-Item ACP-Chatbot.agent.md ACP-Chatbot.agent.local.md
 ```
 
 5. Build and start the ACP container:
@@ -313,7 +314,7 @@ Expected outcome:
 
 ```bash
 cp .env.example .env
-cp ACP-Chatbot.agent.md workspace/ACP-Chatbot.agent.local.md
+cp ACP-Chatbot.agent.md ACP-Chatbot.agent.local.md
 ```
 
 2. Optional: adjust `.env` values (agent name, tool allow-list, port).
@@ -371,6 +372,7 @@ All runtime values are environment variables loaded from `.env`.
 | `ACP_DISABLE_BUILTIN_MCPS` | `true` | Adds `--disable-builtin-mcps` when true. |
 | `ACP_REQUIRE_LOGIN` | `true` | When true, container startup runs `copilot login` first, prints GitHub device-flow code/instructions, and starts ACP only after successful authorization. |
 | `ACP_AUTH_METHOD_ID` | _unset_ | Optional ACP auth method id used by `ask-acp.sh` to call `authenticate` after `initialize` and before `session/new`. |
+| `ACP_AGENT_TEMPLATE_SOURCE` | Compose default: `/host-repo/ACP-Chatbot.agent.local.md` | Path used by startup as the source template for `ACP-Chatbot`. If the file is missing, startup falls back to the built-in image template. |
 | `COPILOT_GITHUB_TOKEN` | _unset_ | Optional GitHub token auth, including fine-grained PATs with the required Copilot access. When set, startup skips device sign-in and uses the token instead. |
 | `GH_TOKEN` | _unset_ | Optional GitHub token auth, including fine-grained PATs with the required Copilot access. Same behavior as `COPILOT_GITHUB_TOKEN`. |
 | `GITHUB_TOKEN` | _unset_ | Optional GitHub token auth, including fine-grained PATs with the required Copilot access. Same behavior as `COPILOT_GITHUB_TOKEN`. |
@@ -379,7 +381,7 @@ All runtime values are environment variables loaded from `.env`.
 | `ACP_COPILOT_SELF_HEAL` | `true` | On startup, runs a Copilot CLI health check and performs a one-time `@github/copilot` reinstall if the native binary fails to execute on that VM. |
 | `ACP_BIND_ALL_INTERFACES` | `true` | When true, startup uses `socat` to open `0.0.0.0:$ACP_PORT` and forward to Copilot's loopback listener. |
 | `ACP_INTERNAL_PORT` | `3001` | Internal loopback port used by Copilot when interface binding proxy mode is enabled. |
-| `ACP_BOOTSTRAP_DEFAULT_AGENT` | `true` | When `ACP_AGENT=ACP-Chatbot`, startup syncs `$ACP_WORKDIR/ACP-Chatbot.agent.local.md` into `$ACP_WORKDIR/.github/agents/ACP-Chatbot.agent.md` when present; otherwise it uses the built-in image template. |
+| `ACP_BOOTSTRAP_DEFAULT_AGENT` | `true` | When `ACP_AGENT=ACP-Chatbot`, startup syncs the source template into `$ACP_WORKDIR/.github/agents/ACP-Chatbot.agent.md` on every startup (compose source defaults to `/host-repo/ACP-Chatbot.agent.local.md`). |
 | `ACP_WEBSOCKET_SERVER_ENABLED` | `false` | Turns the built-in WebSocket proxy ON/OFF inside the same ACP container. Accepts values like `true/false`, `on/off`, `1/0`. |
 | `ACP_WEBSOCKET_PORT` | `8080` | WebSocket listen port when proxy is enabled. |
 | `WEBSOCKET_TOKEN` | _unset_ | Required Basic auth password when WebSocket proxy is enabled; set a long random secret. |
@@ -496,7 +498,7 @@ Token precedence:
 Custom agent:
 
 - `ACP-Chatbot` is the default startup/client agent.
-- Startup syncs `ACP-Chatbot` from `$ACP_WORKDIR/ACP-Chatbot.agent.local.md` into `$ACP_WORKDIR/.github/agents/ACP-Chatbot.agent.md` when needed.
+- Startup syncs `ACP-Chatbot` from the configured template source into `$ACP_WORKDIR/.github/agents/ACP-Chatbot.agent.md` on every startup.
 
 Linux equivalent:
 
