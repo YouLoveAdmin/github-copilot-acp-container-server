@@ -169,6 +169,46 @@ has_auth_token_env() {
   [ -n "${COPILOT_GITHUB_TOKEN:-}" ] || [ -n "${GH_TOKEN:-}" ] || [ -n "${GITHUB_TOKEN:-}" ]
 }
 
+has_byok_provider_env() {
+  [ -n "${COPILOT_PROVIDER_BASE_URL:-}" ] && [ -n "${COPILOT_MODEL:-}" ]
+}
+
+byok_provider_type() {
+  if [ -n "${COPILOT_PROVIDER_TYPE:-}" ]; then
+    echo "$COPILOT_PROVIDER_TYPE" | tr '[:upper:]' '[:lower:]'
+  else
+    echo "openai"
+  fi
+}
+
+validate_byok_provider_config() {
+  if ! has_byok_provider_env; then
+    return 1
+  fi
+
+  provider_type="$(byok_provider_type)"
+
+  case "$provider_type" in
+    openai|azure|anthropic)
+      ;;
+    *)
+      echo "Unsupported COPILOT_PROVIDER_TYPE: $provider_type (expected: openai, azure, anthropic)." >&2
+      return 1
+      ;;
+  esac
+
+  # Azure and Anthropic provider flows require an API key for headless startup.
+  if [ "$provider_type" = "azure" ] || [ "$provider_type" = "anthropic" ]; then
+    if [ -z "${COPILOT_PROVIDER_API_KEY:-}" ]; then
+      echo "COPILOT_PROVIDER_API_KEY is required when COPILOT_PROVIDER_TYPE=$provider_type." >&2
+      return 1
+    fi
+  fi
+
+  export COPILOT_PROVIDER_TYPE="$provider_type"
+  return 0
+}
+
 auth_token_env_name() {
   if [ -n "${COPILOT_GITHUB_TOKEN:-}" ]; then
     echo "COPILOT_GITHUB_TOKEN"
@@ -302,6 +342,14 @@ ensure_copilot_auth() {
   if has_auth_token_env; then
     echo "Copilot token auth found in environment via $(auth_token_env_name); skipping device sign-in."
     return 0
+  fi
+
+  if has_byok_provider_env; then
+    if validate_byok_provider_config; then
+      echo "Copilot BYOK provider auth enabled via COPILOT_PROVIDER_BASE_URL + COPILOT_MODEL; skipping GitHub device sign-in."
+      return 0
+    fi
+    return 1
   fi
 
   if is_copilot_authenticated; then

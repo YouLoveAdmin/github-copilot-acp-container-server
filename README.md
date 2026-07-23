@@ -376,6 +376,11 @@ All runtime values are environment variables loaded from `.env`.
 | `COPILOT_GITHUB_TOKEN` | _unset_ | Optional GitHub token auth, including fine-grained PATs with the required Copilot access. When set, startup skips device sign-in and uses the token instead. |
 | `GH_TOKEN` | _unset_ | Optional GitHub token auth, including fine-grained PATs with the required Copilot access. Same behavior as `COPILOT_GITHUB_TOKEN`. |
 | `GITHUB_TOKEN` | _unset_ | Optional GitHub token auth, including fine-grained PATs with the required Copilot access. Same behavior as `COPILOT_GITHUB_TOKEN`. |
+| `COPILOT_PROVIDER_BASE_URL` | _unset_ | Optional BYOK provider endpoint for external LLMs (OpenAI-compatible, Azure, or Anthropic). When set together with `COPILOT_MODEL`, startup can skip GitHub device sign-in if GitHub tokens are not present. |
+| `COPILOT_PROVIDER_TYPE` | `openai` | Optional BYOK provider type: `openai`, `azure`, or `anthropic`. |
+| `COPILOT_PROVIDER_API_KEY` | _unset_ | Optional BYOK provider API key. Required for `azure` and `anthropic` flows. |
+| `COPILOT_MODEL` | _unset_ | Model/deployment identifier used by Copilot CLI. Required for BYOK mode. |
+| `COPILOT_OFFLINE` | `false` | Optional Copilot CLI offline switch for isolated BYOK usage where you do not want GitHub network calls. |
 | `ACP_LOGIN_STORE_PLAINTEXT` | `true` | Enables fallback automation for the plaintext token confirmation prompt in headless environments if direct login fails. |
 | `ACP_LOGIN_USE_EXPECT` | `false` | Optional fallback path. When true, startup may use `expect` as a last resort after direct and `script` login attempts fail. |
 | `ACP_COPILOT_SELF_HEAL` | `true` | On startup, runs a Copilot CLI health check and performs a one-time `@github/copilot` reinstall if the native binary fails to execute on that VM. |
@@ -393,6 +398,7 @@ Login output note:
 
 - Startup forces plain terminal output (`TERM=dumb`, `NO_COLOR=1`) during `copilot login` so device-code instructions are more likely to be visible via `docker compose logs -f acp-server`.
 - If any of `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` is set, startup skips device sign-in and uses token-based auth instead. Fine-grained PATs work the same way as long as they have the required Copilot permissions.
+- If GitHub token vars are empty and BYOK vars are set (`COPILOT_PROVIDER_BASE_URL` + `COPILOT_MODEL`), startup skips device sign-in and uses external provider auth.
 
 Token auth and device sign-in also apply to WSL runs because the same `start-acp.sh` bootstrap is used there.
 
@@ -464,7 +470,7 @@ Notes:
 
 ## Authentication Modes
 
-The startup script supports two auth flows:
+The startup script supports three auth flows:
 
 1. Device sign-in:
 
@@ -480,12 +486,24 @@ export COPILOT_GITHUB_TOKEN="<your-token>"
 ./start-acp.sh
 ```
 
+3. BYOK external provider sign-in (example: Azure OpenAI):
+
+```bash
+unset COPILOT_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN
+export COPILOT_PROVIDER_TYPE="azure"
+export COPILOT_PROVIDER_BASE_URL="https://YOUR-RESOURCE-NAME.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT-NAME"
+export COPILOT_PROVIDER_API_KEY="<your-azure-api-key>"
+export COPILOT_MODEL="YOUR-DEPLOYMENT-NAME"
+./start-acp.sh
+```
+
 Token precedence:
 
 - `COPILOT_GITHUB_TOKEN` is checked first.
 - If it is unset, `GH_TOKEN` is checked next.
 - If that is unset, `GITHUB_TOKEN` is checked last.
-- Any of the three can be a fine-grained Personal Access Token, as long as it includes the required Copilot permissions.
+- If all three are unset, startup attempts BYOK provider auth when `COPILOT_PROVIDER_BASE_URL` and `COPILOT_MODEL` are configured.
+- Any token above can be a fine-grained Personal Access Token, as long as it includes the required Copilot permissions.
 
 ## Windows concept script
 
